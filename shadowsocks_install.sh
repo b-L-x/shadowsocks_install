@@ -80,12 +80,27 @@ elif [ "$DISTRO_FAMILY" = "rhel" ]; then
     echo -e "${GRAY}Building shadowsocks-libev from source...${RESET}"
     SS_VERSION="3.3.5"
     SS_TAR="shadowsocks-libev-${SS_VERSION}.tar.gz"
-    SS_URL="https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VERSION}/${SS_TAR}"
-    wget -q "$SS_URL" -O "/tmp/${SS_TAR}"
-    tar xf "/tmp/${SS_TAR}" -C /tmp
+    URLS=(
+      "https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VERSION}/${SS_TAR}"
+      "https://ghproxy.com/https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VERSION}/${SS_TAR}"
+      "https://mirror.ghproxy.com/https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VERSION}/${SS_TAR}"
+    )
+    DOWNLOADED=0
+    for URL in "${URLS[@]}"; do
+      echo -e "${GRAY}Trying: $URL${RESET}"
+      if curl -fL --max-time 60 "$URL" -o "/tmp/${SS_TAR}"; then
+        DOWNLOADED=1
+        break
+      fi
+    done
+    if [ "$DOWNLOADED" -eq 0 ]; then
+      echo -e "${RED}Failed to download shadowsocks-libev sources. Check network connectivity.${RESET}"
+      exit 1
+    fi
+    tar xf "/tmp/${SS_TAR}" -C /tmp || { echo -e "${RED}Failed to extract archive.${RESET}"; exit 1; }
     cd "/tmp/shadowsocks-libev-${SS_VERSION}"
-    ./configure --prefix=/usr --disable-documentation
-    make -j"$(nproc)" && make install
+    ./configure --prefix=/usr --disable-documentation || { echo -e "${RED}configure failed.${RESET}"; exit 1; }
+    make -j"$(nproc)" && make install || { echo -e "${RED}make failed.${RESET}"; exit 1; }
     cd /
     rm -rf "/tmp/shadowsocks-libev-${SS_VERSION}" "/tmp/${SS_TAR}"
   fi
