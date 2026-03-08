@@ -99,7 +99,45 @@ elif [ "$DISTRO_FAMILY" = "rhel" ]; then
     fi
     tar xf "/tmp/${SS_TAR}" -C /tmp || { echo -e "${RED}Failed to extract archive.${RESET}"; exit 1; }
     cd "/tmp/shadowsocks-libev-${SS_VERSION}"
-    ./configure --prefix=/usr --disable-documentation || { echo -e "${RED}configure failed.${RESET}"; exit 1; }
+    if ! yum list installed mbedtls-devel &>/dev/null; then
+      echo -e "${GRAY}Building mbedtls from source...${RESET}"
+      MBEDTLS_VERSION="2.28.5"
+      MBEDTLS_TAR="mbedtls-${MBEDTLS_VERSION}.tar.gz"
+      MBEDTLS_URLS=(
+        "https://github.com/Mbed-TLS/mbedtls/releases/download/v${MBEDTLS_VERSION}/${MBEDTLS_TAR}"
+        "https://ghproxy.com/https://github.com/Mbed-TLS/mbedtls/releases/download/v${MBEDTLS_VERSION}/${MBEDTLS_TAR}"
+        "https://mirror.ghproxy.com/https://github.com/Mbed-TLS/mbedtls/releases/download/v${MBEDTLS_VERSION}/${MBEDTLS_TAR}"
+      )
+      yum install -y cmake3 || yum install -y cmake
+      CMAKE_BIN=$(command -v cmake3 || command -v cmake)
+      MBEDTLS_DL=0
+      for MURL in "${MBEDTLS_URLS[@]}"; do
+        echo -e "${GRAY}Trying: $MURL${RESET}"
+        if curl -fL --max-time 60 "$MURL" -o "/tmp/${MBEDTLS_TAR}"; then
+          MBEDTLS_DL=1
+          break
+        fi
+      done
+      if [ "$MBEDTLS_DL" -eq 0 ]; then
+        echo -e "${RED}Failed to download mbedtls. Falling back to OpenSSL.${RESET}"
+        USE_OPENSSL=1
+      else
+        tar xf "/tmp/${MBEDTLS_TAR}" -C /tmp
+        mkdir -p "/tmp/mbedtls-${MBEDTLS_VERSION}/build"
+        cd "/tmp/mbedtls-${MBEDTLS_VERSION}/build"
+        $CMAKE_BIN .. -DCMAKE_INSTALL_PREFIX=/usr -DUSE_SHARED_MBEDTLS_LIBRARY=ON
+        make -j"$(nproc)" && make install
+        ldconfig
+        cd /
+        rm -rf "/tmp/mbedtls-${MBEDTLS_VERSION}" "/tmp/${MBEDTLS_TAR}"
+      fi
+    fi
+    cd "/tmp/shadowsocks-libev-${SS_VERSION}"
+    if [ "${USE_OPENSSL:-0}" -eq 1 ]; then
+      ./configure --prefix=/usr --disable-documentation --with-crypto-library=openssl || { echo -e "${RED}configure failed.${RESET}"; exit 1; }
+    else
+      ./configure --prefix=/usr --disable-documentation || { echo -e "${RED}configure failed.${RESET}"; exit 1; }
+    fi
     make -j"$(nproc)" && make install || { echo -e "${RED}make failed.${RESET}"; exit 1; }
     cd /
     rm -rf "/tmp/shadowsocks-libev-${SS_VERSION}" "/tmp/${SS_TAR}"
