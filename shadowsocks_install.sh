@@ -73,10 +73,21 @@ elif [ "$DISTRO_FAMILY" = "rhel" ]; then
   else
     PKG_MGR="yum"
     yum update -y
-    echo -e "${GRAY}Installing EPEL and dependencies...${RESET}"
-    yum install epel-release -y
-    echo -e "${GRAY}Installing shadowsocks-libev...${RESET}"
-    yum install shadowsocks-libev curl -y
+    echo -e "${GRAY}Installing build dependencies for CentOS 7...${RESET}"
+    yum install -y epel-release curl gcc autoconf libtool make \
+      zlib-devel openssl-devel libev-devel c-ares-devel \
+      libsodium-devel pcre-devel tar wget
+    echo -e "${GRAY}Building shadowsocks-libev from source...${RESET}"
+    SS_VERSION="3.3.5"
+    SS_TAR="shadowsocks-libev-${SS_VERSION}.tar.gz"
+    SS_URL="https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VERSION}/${SS_TAR}"
+    wget -q "$SS_URL" -O "/tmp/${SS_TAR}"
+    tar xf "/tmp/${SS_TAR}" -C /tmp
+    cd "/tmp/shadowsocks-libev-${SS_VERSION}"
+    ./configure --prefix=/usr --disable-documentation
+    make -j"$(nproc)" && make install
+    cd /
+    rm -rf "/tmp/shadowsocks-libev-${SS_VERSION}" "/tmp/${SS_TAR}"
   fi
 fi
 
